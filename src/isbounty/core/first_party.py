@@ -8,10 +8,17 @@ import re
 from .models import PageContent, FirstPartyScore
 
 _PRONOUNS = re.compile(r"\b(we|our|us)\b", re.IGNORECASE)
-_THIRD_PERSON = re.compile(r"\b(the company|they|the researcher|according to)\b", re.IGNORECASE)
-_SAFE_HARBOR = re.compile(r"safe harbou?r|authorized (?:research|testing)|good[- ]faith", re.IGNORECASE)
+_THIRD_PERSON = re.compile(
+    r"\b(the company|they|the researcher|according to|a teenager|researcher earned)\b",
+    re.IGNORECASE,
+)
+_SAFE_HARBOR = re.compile(
+    r"safe harbou?r|authorized (?:research|testing)|good[- ]faith",
+    re.IGNORECASE,
+)
 _REPORTING_CHANNEL = re.compile(
-    r"submit (?:a |your )?report|report (?:a |the )?vulnerabilit|bug bounty portal|security\.txt",
+    r"submit (?:a |your )?report|report (?:a |the )?vulnerabilit|"
+    r"bug bounty portal|security\.txt|send (?:your |the )?report",
     re.IGNORECASE,
 )
 

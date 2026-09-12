@@ -30,8 +30,7 @@ def find_reward_candidates(page: PageContent, triggers: list[str],
 
 
 def reward_headings_present(headings: list[str], heading_keywords: list[str]) -> list[str]:
-    """Headings that reference reward/bounty/compensation/etc, in case the
-    body sentence extraction missed a table or bullet list under them."""
+    """Headings that reference reward/bounty/compensation/etc."""
     hits = []
     for h in headings:
         low = h.lower()

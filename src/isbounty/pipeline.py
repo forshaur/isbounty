@@ -6,24 +6,36 @@ from pathlib import Path
 
 import yaml
 
-from .core.fetcher import fetch_page, registrable_domain
-from .core.reward_extractor import find_reward_candidates
+from .core.fetcher import fetch_page
+from .core.reward_extractor import find_reward_candidates, reward_headings_present
 from .core.reward_classifier import RewardClassifier
 from .core.first_party import score as first_party_score
 from .core.decision_engine import decide
-from .core.models import ScanResult
+from .core.models import ScanResult, RewardCandidate
 from .utils.logging import get_logger
 
 log = get_logger(__name__)
 
 CONFIG_DIR = Path(__file__).parent / "config"
 
-_SCOPE_HEADING_KEYWORDS = ("in scope", "out of scope", "scope", "eligib", "rules")
+_SCOPE_KEYWORDS = (
+    "in scope", "out of scope", "scope", "eligible", "eligibility",
+    "assets", "what is in scope", "program scope", "in-scope", "out-of-scope"
+)
+
 _REPORTING_CHANNEL_RE = re.compile(
-    r"[\w.+-]+@[\w-]+\.[\w.-]+|submit (?:a |your )?report|report (?:a |the )?vulnerabilit|"
-    r"bug bounty portal|security\.txt",
+    r"[\w.+-]+@[\w.-]+\.\w+"                                 # any email
+    r"|submit (?:a |your )?report"
+    r"|report (?:a |the |this )?vulnerabilit"
+    r"|send (?:your |the )?report"
+    r"|bug bounty portal"
+    r"|security\.txt"
+    r"|responsible[- ]disclosure@"
+    r"|bugbounty@"
+    r"|security@",
     re.IGNORECASE,
 )
+
 _INSTITUTIONAL_PRONOUN_RE = re.compile(r"\b(we|our|us)\b", re.IGNORECASE)
 
 
@@ -40,25 +52,31 @@ class Pipeline:
         self.settings = _load_yaml("settings.yaml", config_dir)
         self.classifier = RewardClassifier(self.reward_patterns)
 
-    # -- stage 2: fast structural reject -----------------------------------
     def _structural_reject(self, domain: str, text: str) -> str | None:
         if domain in self.denylist:
             return f"domain '{domain}' is on the news/blog denylist"
 
         pronoun_hits = len(_INSTITUTIONAL_PRONOUN_RE.findall(text))
-        if pronoun_hits == 0:
-            return "no first-person institutional language ('we'/'our'/'us') found"
+        # Softened: only reject if there is *zero* institutional language
+        # and the page is also missing a reporting channel.
+        has_channel = bool(_REPORTING_CHANNEL_RE.search(text))
+        if pronoun_hits == 0 and not has_channel:
+            return "no first-person institutional language and no reporting channel found"
 
-        if not _REPORTING_CHANNEL_RE.search(text):
-            return "no plausible reporting channel (email / submit-report language) found"
+        if not has_channel and pronoun_hits < 3:
+            return "very weak institutional voice and no plausible reporting channel"
 
         return None
 
     def _scope_found(self, text: str, headings: list[str]) -> bool:
         lower = text.lower()
-        if any(kw in lower for kw in _SCOPE_HEADING_KEYWORDS):
+        if any(kw in lower for kw in _SCOPE_KEYWORDS):
             return True
-        return any(any(kw in h.lower() for kw in ("scope", "eligib")) for h in headings)
+        for h in headings:
+            h_low = h.lower()
+            if any(kw in h_low for kw in ("scope", "eligible", "eligibility", "assets", "in-scope", "out-of-scope")):
+                return True
+        return False
 
     def _reporting_channel_found(self, text: str) -> bool:
         return bool(_REPORTING_CHANNEL_RE.search(text))
@@ -89,9 +107,6 @@ class Pipeline:
         return self.run_from_page(page)
 
     def run_from_page(self, page) -> ScanResult:
-        """Runs every stage after fetching. Split out so tests can feed a
-        PageContent built from a golden-fixture file, without needing
-        network access to re-fetch the live page."""
         url = page.url
         reject_reason = self._structural_reject(page.domain, page.raw_text)
         if reject_reason:
@@ -110,6 +125,23 @@ class Pipeline:
             window_before=window_cfg["sentences_before"],
             window_after=window_cfg["sentences_after"],
         )
+
+        # Also surface headings that look like reward sections
+        reward_heads = reward_headings_present(
+            page.headings, self.reward_patterns.get("heading_keywords", [])
+        )
+        if reward_heads and not candidates:
+            # Create a synthetic candidate from the heading so the classifier
+            # at least sees that a reward section exists.
+            synthetic = RewardCandidate(
+                sentence=reward_heads[0],
+                context_before="",
+                context_after="",
+                full_window=reward_heads[0],
+                sentence_index=-1,
+            )
+            candidates.append(synthetic)
+
         self.classifier.classify_all(candidates)
 
         reporting_channel_found = self._reporting_channel_found(page.raw_text)

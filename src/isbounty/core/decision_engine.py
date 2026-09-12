@@ -17,6 +17,7 @@ def decide(candidates: list[RewardCandidate], fp: FirstPartyScore,
     recognition_or_discretionary = bool(labels & {"RECOGNITION_ONLY", "DISCRETIONARY"})
     high_fp = fp.score >= first_party_high_threshold
 
+    # Strongest signal first
     if monetary and high_fp and reporting_channel_found and scope_found:
         reasons.append(
             f"monetary reward statement found; first-party score {fp.score} "
@@ -27,14 +28,17 @@ def decide(candidates: list[RewardCandidate], fp: FirstPartyScore,
     if monetary and high_fp and reporting_channel_found:
         reasons.append(
             "monetary reward statement found with high first-party score and a reporting "
-            "channel; no explicit scope/rules section detected, but the other three signals "
-            "are strong enough on their own"
+            "channel; scope/rules section not explicitly detected but the other signals "
+            "are strong enough"
         )
         return DecisionResult("PAID_BB", "rule_1b_monetary_first_party_channel", reasons)
 
+    # Global denial only wins when there is truly no monetary language
     if global_no_pay and not monetary:
-        reasons.append("explicit global no-pay statement present, and no monetary "
-                        "positive anywhere on the page")
+        reasons.append(
+            "explicit global no-pay statement present, and no monetary "
+            "positive anywhere on the page"
+        )
         return DecisionResult("VDP", "rule_2_global_no_pay", reasons)
 
     if recognition_or_discretionary and not monetary and high_fp and reporting_channel_found:
@@ -46,8 +50,10 @@ def decide(candidates: list[RewardCandidate], fp: FirstPartyScore,
         return DecisionResult("VDP", "rule_3_recognition_or_discretionary", reasons)
 
     if high_fp and reporting_channel_found and scope_found and not candidates:
-        reasons.append("first-party policy with scope/rules and a reporting channel, "
-                        "but no reward-related language anywhere on the page")
+        reasons.append(
+            "first-party policy with scope/rules and a reporting channel, "
+            "but no reward-related language anywhere on the page"
+        )
         return DecisionResult("VDP", "rule_4_no_reward_language_but_program", reasons)
 
     reasons.append(
