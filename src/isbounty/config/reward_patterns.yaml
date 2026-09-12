@@ -1,0 +1,92 @@
+# Reward-related pattern library.
+# All patterns are Python regexes, matched case-insensitively.
+# Word-boundary-sensitive triggers go in `triggers`; everything else is
+# matched inside a candidate's context window (see reward_classifier.py).
+
+triggers:
+  - bounty
+  - bounties
+  - reward
+  - rewards
+  - compensation
+  - payment
+  - payout
+  - paypal
+  - monetary
+  - cash
+  - "cash prize"
+  - "hall of fame"
+  - recognition
+  - swag
+  - "gift card"
+  - loot
+  - acknowledge
+  - acknowledgment
+  - "credit(?:ed)?\\b"
+
+heading_keywords:
+  - reward
+  - bounty
+  - compensation
+  - payment
+  - "hall of fame"
+  - recognition
+
+# Rule 1: explicit monetary commitment somewhere in the context window.
+monetary_positive:
+  - "\\$\\s?\\d"
+  - "\\bUSD\\b"
+  - "\\bEUR\\b"
+  - "€\\s?\\d"
+  - "£\\s?\\d"
+  - "we (?:will )?pay"
+  - "we offer (?:a |cash |monetary )?(?:reward|bounty|payment)"
+  - "bounty (?:of|amount|reward)"
+  - "monetary (?:reward|award|amount|compensation)"
+  - "cash (?:reward|prize|bounty)"
+  - "paypal"
+  - "wire transfer"
+  - "variable monetary amount"
+  - "non-cash payment method"
+  - "reward amounts?"
+  - "pay(?:ing)? (?:a )?bounty"
+  - "gift card"
+  - "payout"
+  - "bank transfer"
+
+# Rule 2: negations that only narrow *who* qualifies, not a global denial.
+scoped_negation:
+  - "for (?:third[- ]party|out[- ]of[- ]scope|low severity|low[- ]impact) (?:reports?|findings?|vulnerabilit(?:y|ies))"
+  - "previously (?:ran|offered|had)"
+  - "no longer run a classic"
+  - "used to (?:offer|run|pay)"
+
+# Rule 3: absolute statements that the whole program pays nothing.
+global_no_pay:
+  - "we do not offer money"
+  - "we don'?t offer (?:money|cash|monetary)"
+  - "do not (?:offer|provide|pay) (?:any )?(?:monetary|cash) "
+  - "no (?:paid|cash|monetary) bug bounty"
+  - "recognition only"
+  - "we no longer offer any monetary"
+  - "not a paid (?:bug bounty|program)"
+  - "non-monetary"
+  - "we don'?t pay"
+  - "unpaid (?:bug bounty|program)"
+
+# Rule 4: credit/swag/thanks, no money implied.
+recognition_only:
+  - "hall of fame"
+  - "public credit"
+  - "acknowledg"
+  - "\\bswag\\b"
+  - "token of appreciation"
+  - "listed (?:on|in) our"
+  - "named in our"
+
+# Rule 5: reward exists but is conditional / not guaranteed.
+discretionary:
+  - "at our (?:sole )?discretion"
+  - "may offer a reward"
+  - "discretion(?:ary)?"
+  - "case[- ]by[- ]case"

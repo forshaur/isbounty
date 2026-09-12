@@ -1,0 +1,38 @@
+# Tunable thresholds for the pipeline. Change these to retune behaviour
+# without touching code.
+
+fetch:
+  timeout_seconds: 15
+  user_agent: "Mozilla/5.0 (compatible; BBScanner/1.0)"
+  use_browser_rendering: false   # true would engage a headless-browser fetch
+                                  # path if/when one is added; static
+                                  # requests+bs4 is sufficient today.
+
+context_window:
+  sentences_before: 1
+  sentences_after: 1
+
+first_party:
+  # score at/above this is treated as "high first-party confidence"
+  high_threshold: 25
+  # caps to keep any single signal from dominating the score
+  max_pronoun_points: 20
+  max_domain_mention_points: 20
+  reporting_channel_points: 15
+  safe_harbor_points: 10
+  max_third_person_penalty: 30
+  third_person_penalty_per_hit: 3
+  pronoun_point_cap_hits: 20
+  domain_mention_point_multiplier: 2
+
+confidence:
+  not_program_default: 0.9
+  structural_reject_default: 0.9
+  base: 0.6
+  monetary_hit_bonus: 0.1
+  max_monetary_bonus: 0.2
+  first_party_score_divisor: 100
+  max_first_party_bonus: 0.2
+  conflict_penalty: 0.2
+  floor: 0.3
+  ceiling: 0.98

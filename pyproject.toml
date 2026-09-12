@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "isbounty"
+version = "0.1.0"
+description = "Fast, explainable bug bounty and vulnerability disclosure policy scanner and classifier."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+    { name = "Shaurya" }
+]
+keywords = [
+    "bug-bounty",
+    "vdp",
+    "security",
+    "vulnerability-disclosure",
+    "policy-scanner",
+    "security-txt",
+    "infosec",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "requests>=2.28.0",
+    "beautifulsoup4>=4.11.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+playwright = [
+    "playwright>=1.30.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
+]
+
+[project.scripts]
+isbounty = "isbounty.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Shaurya/isBounty"
+Repository = "https://github.com/Shaurya/isBounty"
+Issues = "https://github.com/Shaurya/isBounty/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+isbounty = [
+    "config/*.yaml",
+]

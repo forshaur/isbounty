@@ -1,0 +1,19 @@
+# Registrable domains known to be news, blog, or aggregator sites.
+# A hit here is an instant NOT_PROGRAM during the fast structural reject,
+# regardless of any reward language later on the page.
+news_and_blog_domains:
+  - techcrunch.com
+  - theverge.com
+  - bleepingcomputer.com
+  - arstechnica.com
+  - wired.com
+  - forbes.com
+  - medium.com
+  - reddit.com
+  - news.ycombinator.com
+  - krebsonsecurity.com
+  - zdnet.com
+  - thehackernews.com
+  - securityweek.com
+  - darkreading.com
+  - infosecurity-magazine.com
