@@ -26,19 +26,21 @@ _SCOPE_KEYWORDS = (
 )
 
 _REPORTING_CHANNEL_RE = re.compile(
-    r"[\w.+-]+@[\w.-]+\.\w+"                                    # any email
-    r"|docs\.google\.com/forms"                                 # Google Forms
+    r"[\w.+-]+@[\w.-]+\.\w+"                                      # any email
+    r"|docs\.google\.com/forms"                                   # Google Forms
     r"|typeform\.com"
     r"|forms\.office\.com"
     r"|submit (?:a |your |the )?(?:vulnerability|report|bug)"
     r"|report (?:a |the |this )?vulnerabilit"
-    r"|send (?:your |the )?report"
+    r"|send (?:a |your |the )?report"                             # ← added
+    r"|send a report"                                             # ← explicit
+    r"|report (?:it|here|now)"
     r"|bug bounty portal"
     r"|security\.txt"
     r"|responsible[- ]disclosure@"
     r"|bugbounty@"
     r"|security@"
-    r"|src@",                                                   # common security alias
+    r"|src@",
     re.IGNORECASE,
 )
 
@@ -65,7 +67,6 @@ class Pipeline:
         pronoun_hits = len(_INSTITUTIONAL_PRONOUN_RE.findall(text))
         has_channel = bool(_REPORTING_CHANNEL_RE.search(text))
 
-        # Only reject when both signals are extremely weak
         if pronoun_hits == 0 and not has_channel:
             return "no first-person institutional language and no reporting channel found"
 
