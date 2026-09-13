@@ -1,5 +1,7 @@
 """Orchestrates the full scanning flow end to end."""
 from __future__ import annotations
+from isbounty.core import text_utils
+
 
 import re
 from pathlib import Path
@@ -24,15 +26,19 @@ _SCOPE_KEYWORDS = (
 )
 
 _REPORTING_CHANNEL_RE = re.compile(
-    r"[\w.+-]+@[\w.-]+\.\w+"                                 # any email
-    r"|submit (?:a |your )?report"
+    r"[\w.+-]+@[\w.-]+\.\w+"                                    # any email
+    r"|docs\.google\.com/forms"                                 # Google Forms
+    r"|typeform\.com"
+    r"|forms\.office\.com"
+    r"|submit (?:a |your |the )?(?:vulnerability|report|bug)"
     r"|report (?:a |the |this )?vulnerabilit"
     r"|send (?:your |the )?report"
     r"|bug bounty portal"
     r"|security\.txt"
     r"|responsible[- ]disclosure@"
     r"|bugbounty@"
-    r"|security@",
+    r"|security@"
+    r"|src@",                                                   # common security alias
     re.IGNORECASE,
 )
 
@@ -57,14 +63,11 @@ class Pipeline:
             return f"domain '{domain}' is on the news/blog denylist"
 
         pronoun_hits = len(_INSTITUTIONAL_PRONOUN_RE.findall(text))
-        # Softened: only reject if there is *zero* institutional language
-        # and the page is also missing a reporting channel.
         has_channel = bool(_REPORTING_CHANNEL_RE.search(text))
+
+        # Only reject when both signals are extremely weak
         if pronoun_hits == 0 and not has_channel:
             return "no first-person institutional language and no reporting channel found"
-
-        if not has_channel and pronoun_hits < 3:
-            return "very weak institutional voice and no plausible reporting channel"
 
         return None
 

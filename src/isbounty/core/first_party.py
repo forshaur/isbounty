@@ -1,9 +1,8 @@
-"""Score how much a page reads like the domain owner's own official policy,
-as opposed to third-party coverage of someone else's program.
-"""
+"""Score how much a page reads like the domain owner's own official policy."""
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 from .models import PageContent, FirstPartyScore
 
@@ -17,10 +16,24 @@ _SAFE_HARBOR = re.compile(
     re.IGNORECASE,
 )
 _REPORTING_CHANNEL = re.compile(
-    r"submit (?:a |your )?report|report (?:a |the )?vulnerabilit|"
-    r"bug bounty portal|security\.txt|send (?:your |the )?report",
+    r"submit (?:a |your |the )?(?:vulnerability|report|bug)"
+    r"|report (?:a |the )?vulnerabilit"
+    r"|docs\.google\.com/forms"
+    r"|bug bounty portal"
+    r"|security\.txt"
+    r"|send (?:your |the )?report",
     re.IGNORECASE,
 )
+
+
+def _related_domain(email_domain: str, page_domain: str) -> bool:
+    """Treat common related domains as 'own' (e.g. htx-inc.com for htx.com)."""
+    if email_domain == page_domain:
+        return True
+    # Simple heuristic: same second-level name
+    email_base = email_domain.split(".")[0]
+    page_base = page_domain.split(".")[0]
+    return email_base == page_base or email_base.startswith(page_base) or page_base.startswith(email_base)
 
 
 def score(page: PageContent, settings: dict) -> FirstPartyScore:
@@ -38,8 +51,14 @@ def score(page: PageContent, settings: dict) -> FirstPartyScore:
     total += min(domain_mentions * settings["domain_mention_point_multiplier"],
                  settings["max_domain_mention_points"])
 
-    own_email = re.search(r"[\w.+-]+@" + re.escape(page.domain.lower()), lower)
-    has_channel = bool(own_email) or bool(_REPORTING_CHANNEL.search(text))
+    # Reporting channel – now more generous
+    has_channel = bool(_REPORTING_CHANNEL.search(text))
+    own_email_match = re.search(r"[\w.+-]+@([\w.-]+\.\w+)", lower)
+    if own_email_match:
+        email_dom = own_email_match.group(1)
+        if _related_domain(email_dom, page.domain):
+            has_channel = True
+
     breakdown["own_reporting_channel"] = has_channel
     total += settings["reporting_channel_points"] if has_channel else 0
 
