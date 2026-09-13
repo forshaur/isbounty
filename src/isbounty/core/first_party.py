@@ -12,7 +12,9 @@ _THIRD_PERSON = re.compile(
     re.IGNORECASE,
 )
 _SAFE_HARBOR = re.compile(
-    r"safe harbou?r|authorized (?:research|testing)|good[- ]faith",
+    r"safe harbou?r|authorized (?:research|testing)|good[- ]faith|"
+    r"we will not (?:pursue|take) legal action|"
+    r"considered authorized",
     re.IGNORECASE,
 )
 _REPORTING_CHANNEL = re.compile(

@@ -22,26 +22,34 @@ CONFIG_DIR = Path(__file__).parent / "config"
 
 _SCOPE_KEYWORDS = (
     "in scope", "out of scope", "scope", "eligible", "eligibility",
-    "assets", "what is in scope", "program scope", "in-scope", "out-of-scope"
+    "assets", "what is in scope", "program scope", "in-scope", "out-of-scope",
+    "targets", "scope of testing", "in-scope assets", "eligible assets",
+    "domains in scope", "what we consider in scope"
 )
 
 _REPORTING_CHANNEL_RE = re.compile(
-    r"[\w.+-]+@[\w.-]+\.\w+"                                      # any email
-    r"|docs\.google\.com/forms"                                   # Google Forms
-    r"|typeform\.com"
-    r"|forms\.office\.com"
-    r"|submit (?:a |your |the )?(?:vulnerability|report|bug)"
-    r"|report (?:a |the |this )?vulnerabilit"
-    r"|send (?:a |your |the )?report"                             # ← added
-    r"|send a report"                                             # ← explicit
-    r"|report (?:it|here|now)"
-    r"|bug bounty portal"
-    r"|security\.txt"
-    r"|responsible[- ]disclosure@"
-    r"|bugbounty@"
-    r"|security@"
-    r"|src@",
-    re.IGNORECASE,
+    r"""
+    [\w.+-]+@[\w.-]+\.\w+                             # any email
+    | docs\.google\.com/forms                         # Google Forms
+    | typeform\.com
+    | forms\.office\.com
+    | submit (?:a |your |the )?(?:vulnerability|report|bug)
+    | report (?:a |the |this )?vulnerabilit
+    | send (?:a |your |the )?report                   # TradingView style
+    | send a report
+    | report (?:it|here|now)
+    | (?:click|press|use) (?:the |our )?(?:button|form|link) to (?:submit|report)
+    | bug bounty portal
+    | security\.txt
+    | responsible[- ]disclosure@
+    | bugbounty@
+    | security@
+    | src@
+    | report@ 
+    | vulnerability@
+    | (?:submit|send|report).{0,40}(?:form|here|now|button)
+    """,
+    re.IGNORECASE | re.VERBOSE,
 )
 
 _INSTITUTIONAL_PRONOUN_RE = re.compile(r"\b(we|our|us)\b", re.IGNORECASE)
