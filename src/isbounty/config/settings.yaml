@@ -1,17 +1,15 @@
 # Tunable thresholds for the pipeline. Change these to retune behaviour
 # without touching code.
-
 fetch:
   timeout_seconds: 15
   user_agent: "Mozilla/5.0 (compatible; BBScanner/1.0)"
-  use_browser_rendering: false   # true would engage a headless-browser fetch
+  use_browser_rendering: false
+  # true would engage a headless-browser fetch
                                   # path if/when one is added; static
                                   # requests+bs4 is sufficient today.
-
 context_window:
   sentences_before: 1
   sentences_after: 1
-
 first_party:
   # score at/above this is treated as "high first-party confidence"
   high_threshold: 25
@@ -24,7 +22,6 @@ first_party:
   third_person_penalty_per_hit: 3
   pronoun_point_cap_hits: 20
   domain_mention_point_multiplier: 2
-
 confidence:
   not_program_default: 0.9
   structural_reject_default: 0.9
