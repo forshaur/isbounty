@@ -1,56 +1,23 @@
 """Orchestrates the full scanning flow end to end."""
 from __future__ import annotations
-<<<<<<< HEAD
-from isbounty.core import text_utils
-
-
-=======
->>>>>>> stableplay
 import re
 from pathlib import Path
 import yaml
-<<<<<<< HEAD
-
-from .core.fetcher import fetch_page
-from .core.reward_extractor import find_reward_candidates, reward_headings_present
-=======
 from .core.fetcher import fetch_page, registrable_domain
 from .core.reward_extractor import find_reward_candidates
->>>>>>> stableplay
 from .core.reward_classifier import RewardClassifier
 from .core.first_party import score as first_party_score
 from .core.decision_engine import decide
-from .core.models import ScanResult, RewardCandidate
+from .core.models import ScanResult
 from .utils.logging import get_logger
 log = get_logger(__name__)
 CONFIG_DIR = Path(__file__).parent / "config"
-<<<<<<< HEAD
-
-_SCOPE_KEYWORDS = (
-    "in scope", "out of scope", "scope", "eligible", "eligibility",
-    "assets", "what is in scope", "program scope", "in-scope", "out-of-scope"
-)
-
-=======
 _SCOPE_HEADING_KEYWORDS = ("in scope", "out of scope", "scope", "eligib", "rules")
->>>>>>> stableplay
 _REPORTING_CHANNEL_RE = re.compile(
-    r"[\w.+-]+@[\w.-]+\.\w+"                                    # any email
-    r"|docs\.google\.com/forms"                                 # Google Forms
-    r"|typeform\.com"
-    r"|forms\.office\.com"
-    r"|submit (?:a |your |the )?(?:vulnerability|report|bug)"
-    r"|report (?:a |the |this )?vulnerabilit"
-    r"|send (?:your |the )?report"
-    r"|bug bounty portal"
-    r"|security\.txt"
-    r"|responsible[- ]disclosure@"
-    r"|bugbounty@"
-    r"|security@"
-    r"|src@",                                                   # common security alias
+    r"[\w.+-]+@[\w-]+\.[\w.-]+|submit (?:a |your )?report|report (?:a |the )?vulnerabilit|"
+    r"bug bounty portal|security\.txt",
     re.IGNORECASE,
 )
-
 _INSTITUTIONAL_PRONOUN_RE = re.compile(r"\b(we|our|us)\b", re.IGNORECASE)
 def _load_yaml(name: str, config_dir: Path = CONFIG_DIR) -> dict:
     with open(config_dir / name, "r", encoding="utf-8") as f:
@@ -62,43 +29,21 @@ class Pipeline:
         self.denylist = set(_load_yaml("domains_denylist.yaml", config_dir)["news_and_blog_domains"])
         self.settings = _load_yaml("settings.yaml", config_dir)
         self.classifier = RewardClassifier(self.reward_patterns)
-<<<<<<< HEAD
-
-=======
     # -- stage 2: fast structural reject -----------------------------------
->>>>>>> stableplay
     def _structural_reject(self, domain: str, text: str) -> str | None:
         if domain in self.denylist:
             return f"domain '{domain}' is on the news/blog denylist"
         pronoun_hits = len(_INSTITUTIONAL_PRONOUN_RE.findall(text))
-<<<<<<< HEAD
-        has_channel = bool(_REPORTING_CHANNEL_RE.search(text))
-
-        # Only reject when both signals are extremely weak
-        if pronoun_hits == 0 and not has_channel:
-            return "no first-person institutional language and no reporting channel found"
-
-=======
         if pronoun_hits == 0:
             return "no first-person institutional language ('we'/'our'/'us') found"
         if not _REPORTING_CHANNEL_RE.search(text):
             return "no plausible reporting channel (email / submit-report language) found"
->>>>>>> stableplay
         return None
     def _scope_found(self, text: str, headings: list[str]) -> bool:
         lower = text.lower()
-        if any(kw in lower for kw in _SCOPE_KEYWORDS):
+        if any(kw in lower for kw in _SCOPE_HEADING_KEYWORDS):
             return True
-<<<<<<< HEAD
-        for h in headings:
-            h_low = h.lower()
-            if any(kw in h_low for kw in ("scope", "eligible", "eligibility", "assets", "in-scope", "out-of-scope")):
-                return True
-        return False
-
-=======
         return any(any(kw in h.lower() for kw in ("scope", "eligib")) for h in headings)
->>>>>>> stableplay
     def _reporting_channel_found(self, text: str) -> bool:
         return bool(_REPORTING_CHANNEL_RE.search(text))
     def _confidence(self, label: str, candidates: list, fp_score: int) -> float:
@@ -123,6 +68,9 @@ class Pipeline:
         )
         return self.run_from_page(page)
     def run_from_page(self, page) -> ScanResult:
+        """Runs every stage after fetching. Split out so tests can feed a
+        PageContent built from a golden-fixture file, without needing
+        network access to re-fetch the live page."""
         url = page.url
         reject_reason = self._structural_reject(page.domain, page.raw_text)
         if reject_reason:
@@ -140,23 +88,6 @@ class Pipeline:
             window_before=window_cfg["sentences_before"],
             window_after=window_cfg["sentences_after"],
         )
-
-        # Also surface headings that look like reward sections
-        reward_heads = reward_headings_present(
-            page.headings, self.reward_patterns.get("heading_keywords", [])
-        )
-        if reward_heads and not candidates:
-            # Create a synthetic candidate from the heading so the classifier
-            # at least sees that a reward section exists.
-            synthetic = RewardCandidate(
-                sentence=reward_heads[0],
-                context_before="",
-                context_after="",
-                full_window=reward_heads[0],
-                sentence_index=-1,
-            )
-            candidates.append(synthetic)
-
         self.classifier.classify_all(candidates)
         reporting_channel_found = self._reporting_channel_found(page.raw_text)
         scope_found = self._scope_found(page.raw_text, page.headings)
