@@ -10,7 +10,7 @@
 
 ## 🌟 Key Features
 
-- **Accurate Policy Classification**: Categorizes target policy pages into `PAID_BB` (Paid Bug Bounty), `VDP` (Vulnerability Disclosure Program / Hall of Fame / Swag), or `NOT_PROGRAM`.
+- **Accurate Policy Classification**: Categorizes target policy pages into `PAID_BB` (Paid Bug Bounty), `VDP` (Vulnerability Disclosure Program / Hall of Fame / Swag), or `NOT_PROGRAM`. Blocked or thin pages return an operational status (`insufficient_content`, `fetch_error`, `needs_review`) instead of a guessed label.
 - **Explainable Decision Engine**: Every classification cites specific rules, reasons, sentence matches, and first-party verification scores.
 - **First-Party vs Third-Party Detection**: Distinguishes between an organization's genuine disclosure policy and third-party news/blog coverage.
 - **Dual Fetch Engine**: Fast HTTP requests with HTML cleaning, with optional headless Playwright browser rendering for single-page applications (SPA).
@@ -108,7 +108,10 @@ pipeline = Pipeline()
 # Scan any live policy URL
 result = pipeline.run("https://example.com/security")
 
-print(f"Result Label: {result.label}")              # 'PAID_BB', 'VDP', or 'NOT_PROGRAM'
+print(f"Result Label: {result.label}")              # 'PAID_BB', 'VDP', 'NOT_PROGRAM', or None
+print(f"Status:       {result.status}")             # 'classified', 'insufficient_content', 'fetch_error', 'needs_review'
+print(f"Page type:    {result.page_type}")          # official_program, wiki, directory, ...
+print(f"Payment:      {result.payment_status}")     # paid, unpaid, unknown, conflicting
 print(f"Confidence:   {result.confidence}")         # e.g., 0.95
 print(f"Rule:         {result.decision_path}")
 print(f"Reasons:      {result.reasons}")
@@ -136,14 +139,29 @@ result = pipeline.run_from_page(page)
 print(result.label)  # 'PAID_BB'
 ```
 
+`run_from_page` does not make platform network calls by default. Pass
+`allow_network=True` or an `http_post` callable if you need live HackerOne
+GraphQL resolution.
+
+### Statuses and exit codes
+
+| Status | CLI output | Exit code |
+|---|---|---|
+| `classified` | the label (`PAID_BB`, `VDP`, `NOT_PROGRAM`) | 0 |
+| `insufficient_content` | `UNKNOWN (insufficient content)` | 3 |
+| `needs_review` | `UNKNOWN (needs review)` | 3 |
+| `fetch_error` | `FETCH_ERROR` | 2 |
+
+`NOT_PROGRAM` is never used as an error bucket.
+
 ---
 
 ## ⚙️ Configuration
 
 `isBounty` includes declarative YAML configurations in `isbounty/config/`:
-- **`settings.yaml`**: Scoring weights, confidence calculation parameters, request timeouts.
-- **`reward_patterns.yaml`**: Heuristic patterns for monetary rewards, Hall of Fame, swag, and scoped negations.
-- **`domains_denylist.yaml`**: Curated list of news, blogs, and aggregators that should not be classified as programs.
+- **`settings.yaml`**: Request user agent, timeouts, and supporting first-party weights.
+- **`reward_patterns.yaml`**: Reward triggers and legacy heuristic patterns. Clause-level payment evidence lives in `core/payment_evidence.py`.
+- **`domains_denylist.yaml`**: Curated news, blog, wiki, directory and aggregator hosts. Host matching is exact or subdomain-suffix based.
 
 You can supply your own custom config directory:
 ```python
@@ -160,14 +178,8 @@ custom_pipeline = Pipeline(config_dir=Path("./my_config"))
 Run the full test suite (including golden test fixtures from real-world policy pages):
 
 ```bash
-# Using pytest
-pip install pytest
-pytest
-
-# Or running the test scripts directly
-python tests/test_pipeline.py
-python tests/test_decision_engine.py
-python tests/test_reward_classifier.py
+pip install "isbounty[dev]"
+python -m pytest tests
 ```
 
 ---

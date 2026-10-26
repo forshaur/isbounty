@@ -1,3 +1,7 @@
+# Reward-related pattern library.
+# All patterns are Python regexes, matched case-insensitively.
+# Word-boundary-sensitive triggers go in `triggers`; everything else is
+# matched inside a candidate's context window (see reward_classifier.py).
 triggers:
   - bounty
   - bounties
@@ -13,16 +17,16 @@ triggers:
   - "hall of fame"
   - recognition
   - swag
-  - "gift card"
+  - "gift cards?"
   - loot
+  - pay
+  - paid
+  - "cash reward"
+  - "monetary reward"
+  - "bug bounty"
   - acknowledge
   - acknowledgment
   - "credit(?:ed)?\\b"
-  - "api credits?"
-  - severity
-  - "bug bounty"
-  - "vulnerability disclosure"
-
 heading_keywords:
   - reward
   - bounty
@@ -30,29 +34,15 @@ heading_keywords:
   - payment
   - "hall of fame"
   - recognition
-  - payout
-  - severity
-  - "bug bounty"
-  - "in scope"
-  - "out of scope"
-
-# Strong monetary / structured reward language
+# Rule 1: explicit monetary commitment somewhere in the context window.
 monetary_positive:
-  # Currency amounts
   - "\\$\\s?\\d"
   - "\\bUSD\\b"
   - "\\bEUR\\b"
-  - "€\\s?\\d"
-  - "£\\s?\\d"
-  - "up to \\$\\d"
-  - "from \\$\\d"
-  - "\\$\\d+\\s*[-–—to]+\\s*\\$?\\d+"
-
-  # Direct payment language
-  - "we (?:will |may |can )?pay"
-  - "we (?:will |may )?offer (?:a |cash |monetary )?(?:reward|bounty|payment)"
-  - "bounty (?:of|amount|reward|program|payout)"
-  - "monetary (?:reward|award|amount|compensation|benefit)"
+  - "we (?:will )?pay"
+  - "we offer (?:a |cash |monetary )?(?:reward|bounty|payment)"
+  - "bounty (?:of|amount|reward)"
+  - "monetary (?:reward|award|amount|compensation)"
   - "cash (?:reward|prize|bounty)"
   - "paypal"
   - "wire transfer"
@@ -61,43 +51,15 @@ monetary_positive:
   - "non-cash payment method"
   - "reward amounts?"
   - "pay(?:ing)? (?:a )?bounty"
-  - "gift card"
   - "payout"
-  - "api credits?"
-  - "severity[- ]based (?:reward|payout|bounty)"
-  - "align reward amounts with the severity"
-  - "rewards? (?:are|is) at our discretion"
-  - "all rewards are at our discretion"
-  - "we aim to align reward"
-  - "eligible for (?:a )?(?:bounty|reward|payout|monetary)"
-  - "bounty reward"
-  - "will (?:receive|be awarded) (?:a )?(?:bounty|reward|payment)"
-  - "get rewarded"
-  - "you (?:will |may )?be rewarded"
-  - "reward depends on"
-  - "reward levels?"
-  - "your reward"
-  - "the actual reward"
-  - "monetary reward and severity"
-  - "rewards of up to"
-  - "bounties range from"
-  - "up to \\$\\d{1,3}(?:,\\d{3})*"
-
-# Scoped / limited negations (do NOT treat as global no-pay)
+  - "bank transfer"
+# Rule 2: negations that only narrow *who* qualifies, not a global denial.
 scoped_negation:
   - "for (?:third[- ]party|out[- ]of[- ]scope|low[- ]?severity|low[- ]impact|informational) (?:reports?|findings?|vulnerabilit(?:y|ies)|issues?)"
   - "previously (?:ran|offered|had)"
   - "no longer run a classic"
   - "used to (?:offer|run|pay)"
-  - "not eligible for (?:a )?(?:monetary |cash )?(?:reward|bounty|payout)"
-  - "low severity (?:findings?|issues?|reports?) (?:are|is) not eligible"
-  - "does not (?:apply|extend) to third[- ]party"
-  - "rewards will not be given"
-  - "will not (?:be )?eligible for a reward"
-  - "not be eligible for a reward"
-  - "will not qualify for bounties"
-
-# Absolute global no-pay statements
+# Rule 3: absolute statements that the whole program pays nothing.
 global_no_pay:
   - "we do not offer (?:any )?(?:money|cash|monetary rewards?)"
   - "we don'?t offer (?:any )?(?:money|cash|monetary)"
@@ -111,12 +73,7 @@ global_no_pay:
   - "non-monetary (?:only|rewards?)"
   - "we don'?t pay"
   - "unpaid (?:bug bounty|program)"
-  - "no monetary rewards?"
-  - "we do not (?:offer|provide) money or swag"
-  - "no cash rewards?"
-  - "we do not pay researchers"
-
-# Recognition / thanks only
+# Rule 4: credit/swag/thanks, no money implied.
 recognition_only:
   - "hall of fame"
   - "public credit"
@@ -126,16 +83,9 @@ recognition_only:
   - "token of appreciation"
   - "listed (?:on|in) our"
   - "named in our"
-  - "security hall of fame"
-  - "publicly credit"
-  - "we will thank"
-
-# Discretionary / conditional
+# Rule 5: reward exists but is conditional / not guaranteed.
 discretionary:
   - "at our (?:sole )?discretion"
   - "may offer a reward"
   - "discretion(?:ary)?"
   - "case[- ]by[- ]case"
-  - "no guarantee of (?:a )?reward"
-  - "submitting a report does not (?:create|guarantee)"
-  - "rewards? (?:are|is) not guaranteed"

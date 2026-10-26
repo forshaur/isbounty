@@ -1,6 +1,7 @@
-# Registrable domains known to be news, blog, or aggregator sites.
-# A hit here is an instant NOT_PROGRAM during the fast structural reject,
-# regardless of any reward language later on the page.
+# Hosts known to be news, blog, wiki, directory or aggregator sites.
+# Entries match the exact host or a subdomain suffix (news.ycombinator.com
+# still matches news.ycombinator.com). A specific program page on a platform
+# domain is resolved by the platform resolver before this list is consulted.
 news_and_blog_domains:
   - techcrunch.com
   - theverge.com
@@ -17,3 +18,15 @@ news_and_blog_domains:
   - securityweek.com
   - darkreading.com
   - infosecurity-magazine.com
+
+wiki_domains:
+  - wikipedia.org
+
+directory_domains:
+  - securitytxt.org
+  - openbugbounty.org
+
+# bbradar.io is intentionally not denied: its aggregator status is
+# unconfirmed. Add it here only together with a recorded fixture.
+# aggregator_domains:
+#   - bbradar.io

@@ -1,114 +1,79 @@
-"""Strict ordered decision table. First matching rule wins.
-The rule name is always recorded so the outcome is explainable.
+"""Ordered decision table.
+
+Page type comes first. Only current global payment evidence participates in
+the payment rules. NOT_PROGRAM is never used as an error fallthrough.
 """
 from __future__ import annotations
 
-from .models import RewardCandidate, FirstPartyScore, DecisionResult
+from .models import (
+    CONTENT_FETCH_ERROR,
+    CONTENT_INSUFFICIENT,
+    STATUS_CLASSIFIED,
+    STATUS_FETCH_ERROR,
+    STATUS_INSUFFICIENT,
+    STATUS_NEEDS_REVIEW,
+    DecisionResult,
+    PageTypeResult,
+    PaymentEvidence,
+)
+from .page_type import NON_PROGRAM_TYPES
+from .payment_evidence import payment_status
 
 
-def decide(
-    candidates: list[RewardCandidate],
-    fp: FirstPartyScore,
-    reporting_channel_found: bool,
-    scope_found: bool,
-    first_party_high_threshold: int,
-) -> DecisionResult:
-    labels = {c.label for c in candidates}
+def decide(page_type: PageTypeResult,
+           content_status: str,
+           evidence: list[PaymentEvidence]) -> DecisionResult:
     reasons: list[str] = []
+    kind = page_type.page_type
 
-    monetary = "MONETARY_POSITIVE" in labels
-    global_no_pay = "GLOBAL_NO_PAY" in labels
-    recognition_or_discretionary = bool(labels & {"RECOGNITION_ONLY", "DISCRETIONARY"})
-    high_fp = fp.score >= first_party_high_threshold
-    medium_fp = fp.score >= (first_party_high_threshold - 6)
-    low_fp = fp.score >= (first_party_high_threshold - 12)
+    if content_status == CONTENT_FETCH_ERROR:
+        reasons.append("fetch failed or returned an unusable HTTP error")
+        return DecisionResult(None, "content_fetch_error", reasons, STATUS_FETCH_ERROR, "unknown")
 
-    # ------------------------------------------------------------------
-    # Tier 1 – Strongest signals (highest confidence)
-    # ------------------------------------------------------------------
-    if monetary and high_fp and reporting_channel_found and scope_found:
-        reasons.append(
-            f"monetary + high first-party ({fp.score}) + reporting channel + scope"
+    data = page_type.program_data or {}
+    authoritative = bool(
+        kind == "official_program"
+        and page_type.platform
+        and (
+            data.get("offers_bounties") in (True, False)
+            or data.get("google_vrp_exception")
+            or data.get("embedded", {}).get("rewardAllocation") == "pay_for_success"
         )
-        return DecisionResult("PAID_BB", "rule_1_full_signals", reasons)
-
-    # ------------------------------------------------------------------
-    # Tier 2 – Strong monetary + most supporting signals
-    # ------------------------------------------------------------------
-    if monetary and high_fp and reporting_channel_found:
-        reasons.append(
-            f"monetary + high first-party ({fp.score}) + reporting channel "
-            "(scope not explicitly detected)"
-        )
-        return DecisionResult("PAID_BB", "rule_2_monetary_high_fp_channel", reasons)
-
-    if monetary and high_fp and scope_found:
-        reasons.append(
-            f"monetary + high first-party ({fp.score}) + scope "
-            "(reporting channel not detected)"
-        )
-        return DecisionResult("PAID_BB", "rule_3_monetary_high_fp_scope", reasons)
-
-    if monetary and medium_fp and reporting_channel_found and scope_found:
-        reasons.append(
-            f"monetary + medium first-party ({fp.score}) + channel + scope"
-        )
-        return DecisionResult("PAID_BB", "rule_4_monetary_medium_fp_full", reasons)
-
-    # ------------------------------------------------------------------
-    # Tier 3 – Still confident enough for real programs
-    # ------------------------------------------------------------------
-    if monetary and medium_fp and (reporting_channel_found or scope_found):
-        reasons.append(
-            f"monetary + medium first-party ({fp.score}) + "
-            f"{'reporting channel' if reporting_channel_found else 'scope'}"
-        )
-        return DecisionResult("PAID_BB", "rule_5_monetary_medium_fp_partial", reasons)
-
-    if monetary and high_fp:
-        reasons.append(
-            f"strong monetary signals + high first-party score ({fp.score}) "
-            "even without clear channel/scope detection"
-        )
-        return DecisionResult("PAID_BB", "rule_6_monetary_high_fp_only", reasons)
-
-    # ------------------------------------------------------------------
-    # Tier 4 – Explicit VDP / no-pay paths
-    # ------------------------------------------------------------------
-    if global_no_pay and not monetary:
-        reasons.append("explicit global no-pay statement and zero monetary positives")
-        return DecisionResult("VDP", "rule_7_global_no_pay", reasons)
-
-    if recognition_or_discretionary and not monetary and high_fp and reporting_channel_found:
-        reasons.append(
-            f"only recognition/discretionary language + high first-party ({fp.score}) "
-            "+ reporting channel"
-        )
-        return DecisionResult("VDP", "rule_8_recognition_only", reasons)
-
-    if high_fp and reporting_channel_found and scope_found and not candidates:
-        reasons.append(
-            "first-party policy with scope + channel but no reward language at all"
-        )
-        return DecisionResult("VDP", "rule_9_program_without_rewards", reasons)
-
-    # ------------------------------------------------------------------
-    # Tier 5 – Last-resort safety net for very strong monetary language
-    # ------------------------------------------------------------------
-    if monetary and low_fp and reporting_channel_found and scope_found:
-        reasons.append(
-            f"clear monetary language + channel + scope even with lower "
-            f"first-party score ({fp.score})"
-        )
-        return DecisionResult("PAID_BB", "rule_10_monetary_low_fp_but_complete", reasons)
-
-    # ------------------------------------------------------------------
-    # Fallthrough
-    # ------------------------------------------------------------------
-    reasons.append(
-        f"no rule matched | monetary={monetary} | global_no_pay={global_no_pay} | "
-        f"recognition_or_discretionary={recognition_or_discretionary} | "
-        f"fp_score={fp.score} (threshold={first_party_high_threshold}) | "
-        f"channel={reporting_channel_found} | scope={scope_found}"
     )
-    return DecisionResult("NOT_PROGRAM", "rule_11_fallthrough", reasons)
+    if content_status == CONTENT_INSUFFICIENT and not authoritative:
+        reasons.append("fetched body has no usable program content")
+        return DecisionResult(None, "content_insufficient", reasons, STATUS_INSUFFICIENT, "unknown")
+
+    if kind in NON_PROGRAM_TYPES or kind == "closed_program":
+        reasons.append(f"page type '{kind}' is not an official current program")
+        return DecisionResult("NOT_PROGRAM", "page_type_non_program", reasons, STATUS_CLASSIFIED, "unknown")
+
+    if kind == "unknown":
+        reasons.append("page type could not be established")
+        return DecisionResult(None, "page_type_needs_review", reasons, STATUS_NEEDS_REVIEW, "unknown")
+
+    if kind != "official_program":
+        reasons.append(f"unhandled page type '{kind}'")
+        return DecisionResult(None, "fallthrough_needs_review", reasons, STATUS_NEEDS_REVIEW, "unknown")
+
+    program_data = data
+    if program_data.get("multi_program_ambiguous"):
+        reasons.append("page describes multiple programs and cannot be tied to one")
+        return DecisionResult(None, "multi_program_ambiguous", reasons, STATUS_NEEDS_REVIEW, "conflicting")
+
+    status = payment_status(evidence)
+    if status == "unknown" and program_data.get("payment_ambiguous"):
+        reasons.append("program page is official but payment evidence is ambiguous")
+        return DecisionResult(None, "official_program_payment_ambiguous", reasons, STATUS_NEEDS_REVIEW, "unknown")
+    if status == "conflicting":
+        reasons.append("current global no-pay and current global cash evidence conflict")
+        return DecisionResult(None, "official_program_conflicting_payment", reasons, STATUS_NEEDS_REVIEW, "conflicting")
+    if status == "unpaid":
+        reasons.append("official program with a current global no-pay statement")
+        return DecisionResult("VDP", "official_program_global_no_pay", reasons, STATUS_CLASSIFIED, "unpaid")
+    if status == "paid":
+        reasons.append("official program with current cash payment evidence")
+        return DecisionResult("PAID_BB", "official_program_current_cash", reasons, STATUS_CLASSIFIED, "paid")
+
+    reasons.append("official program with no current cash evidence")
+    return DecisionResult("VDP", "official_program_no_cash", reasons, STATUS_CLASSIFIED, "unknown")

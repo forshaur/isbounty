@@ -31,9 +31,7 @@ jobs:
 
       - name: Run unit & golden tests
         run: |
-          python tests/test_decision_engine.py
-          python tests/test_reward_classifier.py
-          python tests/test_pipeline.py
+          python -m pytest tests
 
       - name: Run CLI check
         run: |

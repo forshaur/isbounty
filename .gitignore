@@ -73,4 +73,7 @@ Thumbs.db
 
 # Task & agent scratch files
 scratch/
+.bbscanner
+count.sh
+*.txt
 tests/

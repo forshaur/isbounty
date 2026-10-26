@@ -12,6 +12,7 @@ import requests
 
 from .pipeline import Pipeline
 from .utils.evidence import to_human_readable, to_json
+from .core.models import STATUS_FETCH_ERROR, STATUS_INSUFFICIENT, STATUS_NEEDS_REVIEW
 from . import __version__
 
 
@@ -55,14 +56,19 @@ def main(argv: list[str] | None = None) -> int:
             result = pipeline.run(url)
         except requests.RequestException as e:
             print(f"{url}: FETCH_ERROR ({e})", file=sys.stderr)
-            exit_code = 2
+            exit_code = max(exit_code, 2)
             continue
 
         if args.as_json:
             print(to_json(result))
         else:
             print(to_human_readable(result))
-        print("-" * 70)
+            print("-" * 70)
+
+        if result.status == STATUS_FETCH_ERROR:
+            exit_code = max(exit_code, 2)
+        elif result.status in (STATUS_INSUFFICIENT, STATUS_NEEDS_REVIEW):
+            exit_code = max(exit_code, 3)
 
     return exit_code
 
