@@ -1,94 +1,219 @@
-# isBounty 🎯
+# isBounty
 
 [![PyPI version](https://img.shields.io/pypi/v/isbounty.svg)](https://pypi.org/project/isbounty/)
 [![Python versions](https://img.shields.io/pypi/pyversions/isbounty.svg)](https://pypi.org/project/isbounty/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-**isBounty** is a fast, explainable scanner and classifier for Bug Bounty and Vulnerability Disclosure Policies (VDP). It analyzes security policy pages, identifies reward structures (cash rewards, Hall of Fame, swag), detects official reporting channels and safe harbor provisions, and outputs a clear, confidence-scored classification with a full audit trail.
-
----
-
-## 🌟 Key Features
-
-- **Accurate Policy Classification**: Categorizes target policy pages into `PAID_BB` (Paid Bug Bounty), `VDP` (Vulnerability Disclosure Program / Hall of Fame / Swag), or `NOT_PROGRAM`. Blocked or thin pages return an operational status (`insufficient_content`, `fetch_error`, `needs_review`) instead of a guessed label.
-- **Explainable Decision Engine**: Every classification cites specific rules, reasons, sentence matches, and first-party verification scores.
-- **First-Party vs Third-Party Detection**: Distinguishes between an organization's genuine disclosure policy and third-party news/blog coverage.
-- **Dual Fetch Engine**: Fast HTTP requests with HTML cleaning, with optional headless Playwright browser rendering for single-page applications (SPA).
-- **security.txt Support**: Automatically detects and parses `/.well-known/security.txt` and `/security.txt`.
-- **CLI & Python API**: Use it directly in the terminal, in automated pipelines, or embed it as a Python module.
+**isBounty** is a high-throughput, explainable scanner and classifier for Bug Bounty and Vulnerability Disclosure Policies (VDP). It analyzes security policy documents, detects reward provisions (cash rewards, bounties, Hall of Fame, swag), verifies authentic first-party reporting channels and safe harbor terms, and outputs a deterministic classification with complete reasoning and evidence provenance.
 
 ---
 
-## 🚀 Installation
+## Overview
 
-### From PyPI
+Security researchers, asset management platforms, and threat intelligence pipelines frequently process thousands of target domains without a reliable way to differentiate between:
+- Active, paid bug bounty programs (`PAID_BB`)
+- Vulnerability disclosure programs without monetary compensation (`VDP`)
+- Non-program web pages such as blogs, news articles, directories, or marketing content (`NOT_PROGRAM`)
+- Inaccessible or blocked targets (`FETCH_ERROR`, `INSUFFICIENT_CONTENT`)
+
+isBounty resolves this by implementing a layered, rule-based classification methodology rather than brittle keyword matching or non-deterministic LLM evaluation.
+
+---
+
+## Classification Methodology
+
+isBounty processes documents through a multi-stage deterministic pipeline:
+
+```
+[Target URL]
+     │
+     ▼
+[Stage 1: Fetch & Normalization] ──> Content Extraction, security.txt resolution, HTML cleaning
+     │
+     ▼
+[Stage 2: Page Type Analysis] ─────> Platform recognition (HackerOne, Bugcrowd, Intigriti, YesWeHack),
+     │                               denylist evaluation, article/directory heuristics
+     │
+     ▼
+[Stage 3: Evidence Extraction] ────> Clause segmentation, multi-dimensional payment classification
+     │                               (polarity, scope, tense, subject)
+     │
+     ▼
+[Stage 4: First-Party Scoring] ────> Ownership verification, institutional pronouns, safe harbor,
+     │                               domain asset correlation
+     │
+     ▼
+[Stage 5: Decision Engine] ────────> Ordered evaluation rules with deterministic precedence
+     │
+     ▼
+[Classification Result] ───────────> Label, confidence score, decision rule, and audit trace
+```
+
+### 1. Document Acquisition and Normalization
+- **HTTP Fetching**: Requests pages with standard browser headers, following redirects and tracking requested vs. canonical destination URLs.
+- **Headless Browser Rendering**: Optional Playwright Chromium integration for client-rendered Single Page Applications (SPAs).
+- **security.txt Ingestion**: Discovers and parses `/.well-known/security.txt` and `/security.txt` fields (`Contact`, `Policy`, `Hiring`, `Acknowledgments`).
+- **Text & Structure Extraction**: Strips navigation, headers, footers, boilerplate, and scripts, producing clean text chunks, structural headings, and sentence arrays.
+
+### 2. Page Type Categorization
+Before evaluating payment language, the scanner classifies the nature of the page:
+- `official_program`: Self-hosted policy page or verified crowd-security platform program.
+- `aggregator` / `directory`: Third-party listings of bug bounty programs (e.g., directory lists).
+- `news` / `blog`: Articles, vulnerability writeups, or journalistic reporting.
+- `wiki`: Reference or encyclopedic entries.
+- `closed_program`: Archived, decommissioned, or paused programs.
+
+Pages identified as non-programs (`news`, `blog`, `wiki`, `directory`) are immediately marked `NOT_PROGRAM` to prevent false positives from quoted reward figures in news stories.
+
+### 3. Multi-Dimensional Payment Evidence Extraction
+Rather than basic keyword matches, payment phrases are parsed into structured evidence objects categorized by four dimensions:
+- **Polarity**: Positive (commitment to pay) vs. Negative (statement of non-payment).
+- **Scope**: Global (applies to whole program) vs. Scoped (applies only to specific findings, e.g., "no bounty for out-of-scope targets").
+- **Tense**: Current (active terms) vs. Historical (past programs, e.g., "we previously ran a cash bounty").
+- **Subject**: First-party commitment ("we pay") vs. Third-party ("researcher was paid by Google").
+
+### 4. Supporting First-Party Verification
+The system analyzes ownership indicators to guarantee that the text represents an authentic policy issued by the domain owner:
+- Institutional pronouns (`we`, `our`, `us`) vs. third-person markers (`the company`, `the researcher`, `according to`).
+- Valid security reporting channels (security email addresses, submission forms, PGP keys).
+- Legal safe harbor statements ("authorized research", "good faith", "will not pursue legal action").
+- Domain asset correlation between policy domain, contact emails, and hostnames.
+
+### 5. Ordered Decision Rules
+The decision engine applies strict hierarchical evaluation. First matching rule determines the outcome:
+
+1. **Content Validity Check**: If retrieval fails or returns HTTP errors, report `fetch_error` (`STATUS_FETCH_ERROR`). If content is blocked, empty, or bot-challenged, report `insufficient_content` (`STATUS_INSUFFICIENT`).
+2. **Page Type Check**: Non-program page types are labeled `NOT_PROGRAM`.
+3. **Platform Authoritative Data**: Authoritative metadata from verified platforms (such as structured HackerOne or Bugcrowd responses) takes precedence.
+4. **Current Global Payment Evidence**:
+   - Explicit current global cash commitment + verified program context -> `PAID_BB`.
+   - Conflicting statements (both global pay and global no-pay detected) -> flagged for manual verification (`STATUS_NEEDS_REVIEW`).
+   - Explicit current global no-pay statement ("we do not offer monetary rewards", "recognition only") -> `VDP`.
+5. **VDP Fallthrough**: Official program page with established reporting channels and scope, but zero affirmative cash statements -> `VDP`.
+6. **Ambiguity Handling**: Pages where program status or reward structure cannot be verified with certainty are designated `needs_review` (`STATUS_NEEDS_REVIEW`) rather than misclassified.
+
+---
+
+## Output Labels and Statuses
+
+### Classification Labels
+- `PAID_BB`: Official program offering monetary bounties or cash rewards.
+- `VDP`: Vulnerability Disclosure Program offering non-monetary recognition (Hall of Fame, acknowledgments, swag, or safe harbor only).
+- `NOT_PROGRAM`: Content confirmed to be non-policy material (news, writeup, product documentation).
+- `None`: Emitted when operational issues prevent classification.
+
+### Operational Status Codes and Process Exit Codes
+
+| Status | Interpretation | CLI Display | Process Exit Code |
+|---|---|---|---|
+| `classified` | Successfully classified with high confidence | `PAID_BB`, `VDP`, `NOT_PROGRAM` | `0` |
+| `fetch_error` | Network failure, DNS error, or HTTP error | `FETCH_ERROR` | `2` |
+| `insufficient_content` | Empty body, bot-wall, or paywall | `UNKNOWN (insufficient content)` | `3` |
+| `needs_review` | Ambiguous signals or conflicting statements | `UNKNOWN (needs review)` | `3` |
+
+`NOT_PROGRAM` is reserved strictly for confirmed non-policy content and is never used as an error fallback.
+
+---
+
+## System Requirements
+
+- Python >= 3.9
+- Operating Systems: Linux, macOS, Windows
+- Network connectivity for live scanning
+
+---
+
+## Installation
+
+### Standard Installation
 ```bash
 pip install isbounty
 ```
 
-### With Headless Browser Rendering (Playwright)
-To enable rendering JavaScript-heavy pages:
+### Installation with Browser Rendering (Playwright)
+Required for single-page applications (SPAs) and JavaScript-rendered portals:
 ```bash
 pip install "isbounty[playwright]"
 playwright install chromium
 ```
 
-### From Source
+### Installation from Source
 ```bash
-git clone https://github.com/Shaurya/isBounty.git
-cd isBounty
+git clone https://github.com/forshaur/isbounty.git
+cd isbounty
 pip install -e .
 ```
 
 ---
 
-## 💻 CLI Usage
+## Command Line Interface (CLI)
 
-### Basic Scan
-Scan one or more URLs:
+### Single Target Scan
 ```bash
 isbounty https://example.com/security
 ```
 
-### Multiple URLs
+### Multiple Targets
 ```bash
-isbounty https://target1.com/bug-bounty https://target2.com/security
+isbounty https://target1.com/security https://target2.com/bug-bounty
 ```
 
-### JSON Output
-Output complete evidence trails, sentence extractions, and scoring breakdowns:
+### Structured JSON Output
+Provide `--json` for automated ingestion into security pipelines and data lakes:
 ```bash
 isbounty --json https://example.com/security
 ```
 
-Sample JSON Output:
+#### JSON Output Schema
 ```json
 {
   "url": "https://example.com/security",
+  "requested_url": "https://example.com/security",
+  "final_url": "https://example.com/security/policy",
+  "status": "classified",
   "label": "PAID_BB",
   "confidence": 0.95,
-  "decision_path": "rule_1_monetary_first_party_channel_scope",
+  "decision_path": "official_program_current_cash",
+  "payment_status": "paid",
+  "fetch_status": "200",
   "reporting_channel_found": true,
   "scope_found": true,
   "reasons": [
-    "monetary reward statement found; first-party score 35 >= 25; reporting channel and scope/rules both present"
+    "official program with current cash payment evidence"
   ],
+  "page_type": {
+    "page_type": "official_program",
+    "confidence": 0.95,
+    "platform": null
+  },
   "first_party": {
     "score": 35,
     "breakdown": {
-      "institutional_pronoun_hits": 12,
-      "same_domain_asset_mentions": 8,
+      "institutional_pronoun_hits": 14,
+      "same_domain_asset_mentions": 6,
       "own_reporting_channel": true,
       "safe_harbor_language": true,
       "third_person_markers": 0,
       "security_txt_present": true
     }
   },
+  "evidence": [
+    {
+      "kind": "cash_positive",
+      "clause": "We reward security researchers with bounties up to $10,000 for qualifying reports.",
+      "polarity": "positive",
+      "scope": "global",
+      "time": "current",
+      "subject": "first_party"
+    }
+  ],
   "reward_candidates": [
     {
+      "sentence": "We reward security researchers with bounties up to $10,000 for qualifying reports.",
+      "sentence_index": 3,
       "label": "MONETARY_POSITIVE",
-      "sentence_index": 4,
-      "sentence": "We offer cash rewards of up to $5,000 for qualifying critical vulnerabilities."
+      "kind": "cash_positive",
+      "reason": "cash_positive regex match"
     }
   ]
 }
@@ -96,116 +221,85 @@ Sample JSON Output:
 
 ---
 
-## 🐍 Python Library API
+## Python API
 
-You can easily embed `isBounty` into your own Python applications:
-
+### Basic Usage
 ```python
 from isbounty import Pipeline
 
 pipeline = Pipeline()
-
-# Scan any live policy URL
 result = pipeline.run("https://example.com/security")
 
-print(f"Result Label: {result.label}")              # 'PAID_BB', 'VDP', 'NOT_PROGRAM', or None
-print(f"Status:       {result.status}")             # 'classified', 'insufficient_content', 'fetch_error', 'needs_review'
-print(f"Page type:    {result.page_type}")          # official_program, wiki, directory, ...
-print(f"Payment:      {result.payment_status}")     # paid, unpaid, unknown, conflicting
-print(f"Confidence:   {result.confidence}")         # e.g., 0.95
-print(f"Rule:         {result.decision_path}")
-print(f"Reasons:      {result.reasons}")
+if result.status == "classified":
+    print(f"URL: {result.url}")
+    print(f"Classification: {result.label}")
+    print(f"Confidence: {result.confidence}")
+    print(f"Decision Rule: {result.decision_path}")
+else:
+    print(f"Scan status: {result.status} (Reasons: {result.reasons})")
 ```
 
-### Offline / Custom HTML Scanning
-You can also scan pre-fetched or synthetic content directly without live network requests:
+### In-Memory / Offline Document Evaluation
+Analyze pre-fetched HTML or custom document models without network dependencies:
 
 ```python
 from isbounty import Pipeline, PageContent
 from isbounty.core.text_utils import split_sentences
 
-body = "Acme Corp operates a bug bounty program. We pay bounties up to $2,500. Report to security@acme.com."
+document_text = """
+Acme Security Vulnerability Disclosure Policy
+We value the work of security researchers. Acme provides monetary rewards 
+ranging from $250 to $5,000 for critical issues reported to security@acme.example.
+Testing against out-of-scope assets is strictly prohibited.
+"""
+
 page = PageContent(
-    url="https://acme.com/bounty",
-    raw_text=body,
-    sentences=split_sentences(body),
-    headings=["Bug Bounty Rules"],
-    domain="acme.com",
+    url="https://acme.example/security",
+    raw_text=document_text,
+    sentences=split_sentences(document_text),
+    headings=["Vulnerability Disclosure Policy"],
+    domain="acme.example",
     security_txt=None
 )
 
 pipeline = Pipeline()
 result = pipeline.run_from_page(page)
-print(result.label)  # 'PAID_BB'
+
+print(result.label)          # 'PAID_BB'
+print(result.payment_status) # 'paid'
 ```
-
-`run_from_page` does not make platform network calls by default. Pass
-`allow_network=True` or an `http_post` callable if you need live HackerOne
-GraphQL resolution.
-
-### Statuses and exit codes
-
-| Status | CLI output | Exit code |
-|---|---|---|
-| `classified` | the label (`PAID_BB`, `VDP`, `NOT_PROGRAM`) | 0 |
-| `insufficient_content` | `UNKNOWN (insufficient content)` | 3 |
-| `needs_review` | `UNKNOWN (needs review)` | 3 |
-| `fetch_error` | `FETCH_ERROR` | 2 |
-
-`NOT_PROGRAM` is never used as an error bucket.
 
 ---
 
-## ⚙️ Configuration
+## Configuration and Rule Customization
 
-`isBounty` includes declarative YAML configurations in `isbounty/config/`:
-- **`settings.yaml`**: Request user agent, timeouts, and supporting first-party weights.
-- **`reward_patterns.yaml`**: Reward triggers and legacy heuristic patterns. Clause-level payment evidence lives in `core/payment_evidence.py`.
-- **`domains_denylist.yaml`**: Curated news, blog, wiki, directory and aggregator hosts. Host matching is exact or subdomain-suffix based.
+All classification parameters, regex heuristics, and domain classifications are managed declaratively in `src/isbounty/config/`:
 
-You can supply your own custom config directory:
+- **`settings.yaml`**: Network timeouts, HTTP user-agent identity, and scoring weights for first-party signals.
+- **`reward_patterns.yaml`**: Regex patterns for triggers, monetary currencies, recognition tokens, and scoped exclusion clauses.
+- **`domains_denylist.yaml`**: Maintained domain mappings for news publishers, writeup aggregators, technology wikis, and directories.
+
+### Custom Configuration Directory
+Deploy private rule adjustments without modifying package files:
 ```python
 from pathlib import Path
 from isbounty import Pipeline
 
-custom_pipeline = Pipeline(config_dir=Path("./my_config"))
+pipeline = Pipeline(config_dir=Path("/etc/isbounty/config"))
 ```
 
 ---
 
-## 🧪 Testing
+## Development and Verification
 
-Run the full test suite (including golden test fixtures from real-world policy pages):
-
+Run the test suite, including synthetic tests and golden fixtures:
 ```bash
 pip install "isbounty[dev]"
-python -m pytest tests
+python -m pytest tests/ -v
 ```
 
 ---
 
-## 📦 Publishing to PyPI
+## License
 
-1. **Build Distribution**:
-   ```bash
-   pip install build twine
-   python -m build
-   ```
-
-2. **Check Artifacts**:
-   ```bash
-   twine check dist/*
-   ```
-
-3. **Upload to PyPI**:
-   ```bash
-   twine upload dist/*
-   ```
-
-*(Alternatively, use the automated GitHub Actions workflow under `.github/workflows/publish.yml` when releasing tags.)*
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
+This software is released under the [MIT License](LICENSE).
